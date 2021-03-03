@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/MagneticField.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <stdint.h>
 #include <string>
 
@@ -99,6 +100,7 @@ int main(int argc, char **argv) {
   nh.param<std::string>("topic", topic, "/imu/data");
 
   ros::Publisher pubImu = nh.advertise<sensor_msgs::Imu>(topic, 100);
+  ros::Publisher pubImu_orig = nh.advertise<sensor_msgs::Imu>("imu_original", 100);
 
   // Initialize the freespace library
   int rc = freespace_init();
@@ -210,9 +212,13 @@ int main(int argc, char **argv) {
 
       if (have_accel && have_angVel && have_angPos) {
         sensor_msgs::Imu msg;
+        sensor_msgs::Imu msg2;
         msg.header.seq = imu_seq++;
         msg.header.stamp = ros::Time::now();
         msg.header.frame_id = imu_frame_id;
+        msg2.header.seq = imu_seq++;
+        msg2.header.stamp = ros::Time::now();
+        msg2.header.frame_id = imu_frame_id;
 
         // Extract orientation quaternion.
         msg.orientation.x = angPos.x;
@@ -235,8 +241,45 @@ int main(int argc, char **argv) {
         msg.linear_acceleration.z = accel.z;
         std::fill(std::begin(msg.linear_acceleration_covariance),
                   std::end(msg.linear_acceleration_covariance), 0.0);
+        
+        tf2::Quaternion q(
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z,
+            msg.orientation.w);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
 
-        pubImu.publish(msg);
+        tf2::Quaternion q_new;
+        q_new.setRPY(roll, -1 * pitch, yaw);
+        q_new.normalize();
+        //ROS_INFO_STREAM(q_new[0]);
+        //tf2::convert(q_new, commanded_pose.pose.orientation);
+        
+        msg2.orientation.x = q_new[0];
+        msg2.orientation.y = q_new[1];
+        msg2.orientation.z = q_new[2];
+        msg2.orientation.w = q_new[3];
+        std::fill(std::begin(msg.orientation_covariance),
+                  std::end(msg.orientation_covariance), 0.0);
+        
+        // Extract angular velocity.
+        msg2.angular_velocity.x = angVel.x;
+        msg2.angular_velocity.y = angVel.y;
+        msg2.angular_velocity.z = angVel.z;
+        std::fill(std::begin(msg2.angular_velocity_covariance),
+                  std::end(msg2.angular_velocity_covariance), 0.0);
+
+        // Extract linear acceleration.
+        msg2.linear_acceleration.x = accel.x;
+        msg2.linear_acceleration.y = accel.y;
+        msg2.linear_acceleration.z = accel.z;
+        std::fill(std::begin(msg2.linear_acceleration_covariance),
+                  std::end(msg2.linear_acceleration_covariance), 0.0);
+
+        pubImu.publish(msg2);
+        pubImu_orig.publish(msg);
       }
     }
   }

@@ -3,8 +3,8 @@
 
     <node pkg="fsm_imu" name="fsm_imu" type="fsm_imu_node" output="screen">
         <param name="period_us" value="4000" /> <!--e.g. 4000 is 250Hz and 8000 is 125Hz-->
-        <param name="frame_id" value="/imu" />
-        <param name="topic" value="/imu/data" />
+        <param name="frame_id" value="imu_link" />
+        <param name="topic" value="/imu_raw" />
     </node>
 
 </launch>
